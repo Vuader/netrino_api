@@ -1,3 +1,0 @@
-napalm
-easysnmp
-tachyon_api

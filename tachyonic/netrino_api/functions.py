@@ -2,10 +2,11 @@ from __future__ import print_function
 from collections import OrderedDict
 from pyipcalc import *
 from workers.tasks import *
-from netrino_celery import app
-from tachyon.api import api
+from netrino_celery import app as celery_app
+from tachyonic.api.api import sql as api
 from jinja2 import Template
-import nfw
+from tachyonic.neutrino.mysql import Mysql
+from tachyonic.neutrino import constants as const
 import sys
 import datetime
 import uuid
@@ -17,7 +18,7 @@ import json
 def getLoggedInUser(req):
     token = req.headers.get('X-Auth-Token', None)
     if token:
-        db = nfw.Mysql()
+        db = Mysql()
         sql = ('SELECT user_id,user.username ' +
                'FROM token LEFT JOIN user ON ' +
                'user_id=user.id WHERE token=%s')
@@ -30,7 +31,7 @@ def getLoggedInUser(req):
 
 
 def addService(values, service_id):
-    db = nfw.Mysql()
+    db = Mysql()
     serviceName = values.get('service_name', '')
     interfaceGroup = values.get('interface_group', '')
     userRole = values.get('user_role', '')
@@ -127,7 +128,7 @@ def viewDevicePorts(req, resp, ip, view=None):
         vals = []
         sql = 'SELECT * FROM interface where id=%s'
         vals.append(int(ip))
-        db = nfw.Mysql()
+        db = Mysql()
 
         results = db.execute(sql, vals)
 
@@ -161,37 +162,37 @@ def viewDevicePorts(req, resp, ip, view=None):
 def discoverDevice(req, id=None):
     if id:
         id = int(id)
-        db = nfw.Mysql()
+        db = Mysql()
         sql = 'SELECT snmp_comm FROM device where id=%s'
         result = db.execute(sql, (id,))
         if result:
             community = result[0]['snmp_comm']
         else:
-            raise nfw.HTTPError(nfw.HTTP_404, "Device not found",
+            raise const.HTTPError(const.HTTP_404, "Device not found",
                                 "POST don't PUT")
     else:
         rvalues = json.loads(req.read())
         if not 'snmp_comm' in rvalues:
-            raise nfw.HTTPError(nfw.HTTP_404, "Missing required paramater",
+            raise const.HTTPError(const.HTTP_404, "Missing required paramater",
                                 "Required paramater 'snmp_comm' not found")
         elif not 'id' in rvalues:
-            raise nfw.HTTPError(nfw.HTTP_404, "Missing required paramater",
+            raise const.HTTPError(const.HTTP_404, "Missing required paramater",
                                 "Required paramater 'id' not found")
         else:
             try:
                 id = int(rvalues['id'])
             except:
-                raise nfw.HTTPError(nfw.HTTP_404, 'Invalid type',
+                raise const.HTTPError(const.HTTP_404, 'Invalid type',
                                     "'id' must be integer")
             if deviceExists(id):
-                raise nfw.HTTPError(nfw.HTTP_404, 'Device already exists',
+                raise const.HTTPError(const.HTTP_404, 'Device already exists',
                                     "PUT don't POST")
             community = rvalues['snmp_comm']
 
     try:
         ip = dec2ip(id, 4)
     except:
-        raise nfw.HTTPError(nfw.HTTP_404, 'Invalid type',
+        raise const.HTTPError(const.HTTP_404, 'Invalid type',
                             "'id' is not a valid ip address")
     srid = addSR(device=id, snippet="Running discovery on " + ip)
     loggedInUser = getLoggedInUser(req)
@@ -201,7 +202,7 @@ def discoverDevice(req, id=None):
         addSR(taskID=task.task_id, srid=srid)
         return {'Service Request': {'id': str(srid), 'task id': str(task.task_id)}}
     else:
-        raise nfw.HTTPError(nfw.HTTP_404, 'Failed to create service request',
+        raise const.HTTPError(const.HTTP_404, 'Failed to create service request',
                             "Failed to create service request")
 
 
@@ -256,7 +257,7 @@ def mysqlLJ(s, f, ljo, w=None, g=None):
             if i > 0:
                 sql.append(',')
             sql.append(g[i])
-    db = nfw.Mysql()
+    db = Mysql()
     results = db.execute(' '.join(sql), vals)
     resources = []
     for result in results:
@@ -271,7 +272,7 @@ def mysqlLJ(s, f, ljo, w=None, g=None):
 
 
 def getServices(req,resp,sid=None):
-    db = nfw.Mysql()
+    db = Mysql()
     if sid:
         w = {'services.id': sid}
     else:
@@ -300,7 +301,7 @@ def getServices(req,resp,sid=None):
 
 
 def getCustServices(cid):
-    db = nfw.Mysql()
+    db = Mysql()
     rmap = {'service_requests.port': 'port'}
     rmap['service_requests.creation_date'] = 'date'
     rmap['service_requests.status'] = 'status'
@@ -326,7 +327,7 @@ def getCustServices(cid):
 
 
 def updateSR(srid, status):
-    db = nfw.Mysql()
+    db = Mysql()
     if srid:
         sql = 'UPDATE service_requests SET status=%s WHERE id=%s'
         vals = (status, srid)
@@ -365,7 +366,7 @@ def getResources(resource, ip=None, igid=None, onlyActive=False):
 
 
 def getSnippet(serviceID):
-    db = nfw.Mysql()
+    db = Mysql()
     snippet = []
     sql = '''SELECT config_snippet,activate_snippet,
 		deactivate_snippet,fields from services where id=%s'''
@@ -382,7 +383,7 @@ def getSnippet(serviceID):
 
 def addSR(device=None, taskID=None, srid=None, customer=None,
           port=None, service=None, snippet=None, resources=None):
-    db = nfw.Mysql()
+    db = Mysql()
     if taskID and srid:
         sql = 'UPDATE service_requests set task_id=%s WHERE id=%s'
         vals = (taskID, srid)
@@ -403,7 +404,7 @@ def addCust(values, custid):
     for field in sorted(values):
         text_fields[field] = values.get(field)
     fields = json.dumps(text_fields)
-    db = nfw.Mysql()
+    db = Mysql()
     if custid:
         sql = 'UPDATE customers set name=%s,fields=%s WHERE id=%s'
         vals = (name, fields, custid)
@@ -416,7 +417,7 @@ def addCust(values, custid):
 
 def addIGroup(values, igid=None):
     igroup = values.get('interface_group')
-    db = nfw.Mysql()
+    db = Mysql()
     if igid:
         sql = 'UPDATE interface_groups set name=%s WHERE id=%s'
         vals = (igroup, igid)
@@ -430,7 +431,7 @@ def addIGroup(values, igid=None):
 
 def addSupernet(values, supernet, sid=None):
     supernet = values.get('supernet')
-    db = nfw.Mysql()
+    db = Mysql()
     supernet = supernet.split('/')
     network = ip2dec(supernet[0], 4)
     prefix = int(supernet[1])
@@ -446,14 +447,14 @@ def addSupernet(values, supernet, sid=None):
 
 
 def removeCust(custid):
-    db = nfw.Mysql()
+    db = Mysql()
     sql = 'DELETE FROM customers WHERE id=%s'
     db.execute(sql, (custid,))
     db.commit()
 
 
 def removeIGroup(igid):
-    db = nfw.Mysql()
+    db = Mysql()
     sql = 'DELETE FROM interface_groups WHERE id=%s'
     vals = (igid,)
     db.execute(sql, vals)
@@ -461,7 +462,7 @@ def removeIGroup(igid):
 
 
 def removeSupernet(sid):
-    db = nfw.Mysql()
+    db = Mysql()
     sql = 'DELETE FROM supernets WHERE id=%s'
     vals = (sid,)
     db.execute(sql, vals)
@@ -469,7 +470,7 @@ def removeSupernet(sid):
 
 
 def removeService(sid):
-    db = nfw.Mysql()
+    db = Mysql()
     sql = 'DELETE FROM services WHERE id=%s'
     vals = (sid,)
     db.execute(sql, vals)
@@ -478,7 +479,7 @@ def removeService(sid):
 
 def removeDevice(did):
     try:
-        db = nfw.Mysql()
+        db = Mysql()
         sql = 'DELETE FROM device WHERE ip=%s'
         vals = (did,)
         db.execute(sql, vals)
@@ -495,7 +496,7 @@ def getCusts(custid=None, fields=None):
     else:
         sql = 'SELECT * FROM customers where id=%s'
         vals.append(custid)
-    db = nfw.Mysql()
+    db = Mysql()
     results = db.execute(sql, vals)
     customers = {}
     for result in results:
@@ -522,7 +523,7 @@ def getIGroups(igid=None, view=None):
     else:
         sql = 'SELECT * FROM interface where id=%s'
         vals.append(igid)
-    db = nfw.Mysql()
+    db = Mysql()
 
     results = db.execute(sql, vals)
 
@@ -550,7 +551,7 @@ def getSupernets(sid=None):
     else:
         sql = 'SELECT * FROM supernets where id="%s"'
         vars = (sid,)
-    db = nfw.Mysql()
+    db = Mysql()
     results = db.execute(sql, vars)
     supernets = {}
     for result in results:
@@ -564,7 +565,7 @@ def assignIGPort(req, id):
     values = json.loads(req.read())
     port = values['port']
     ip = values['device']
-    db = nfw.Mysql()
+    db = Mysql()
     sql = 'UPDATE device_port set igroup=%s WHERE id=%s AND port=%s'
     result = db.execute(sql, (id, ip, port))
     db.commit()
@@ -574,7 +575,7 @@ def assignIGPort(req, id):
                        'device': ip}
         return port_igroup
     else:
-        raise nfw.HTTPError(nfw.HTTP_404, 'Port Interface group assignment failed',
+        raise const.HTTPError(const.HTTP_404, 'Port Interface group assignment failed',
                             'Item not found %s' % (str(result),))
 
 
@@ -606,7 +607,7 @@ def isRFC5735(net):
 
 def updateSupernets(did):
     minpl = config.get('netrino').get('minimum_prefix_length')
-    db = nfw.Mysql()
+    db = Mysql()
     sresults = db.execute('SELECT * FROM supernets')
     ipresults = db.execute('''SELECT alias,prefix_len 
 			   FROM device_port WHERE alias
@@ -657,7 +658,7 @@ def updateSupernets(did):
 
 
 def getSNMPComm(device_id):
-    db = nfw.Mysql()
+    db = Mysql()
     results = db.execute(
         'SELECT snmp_comm FROM device WHERE ip = %s', (device_id,))
     if results:
@@ -687,7 +688,7 @@ def checkResourceUsage(resource, rid):
         sql = 'SELECT port FROM device_port WHERE igroup = %s'
     elif resource == "customer":
         sql = 'SELECT id FROM service_requests WHERE customer = %s AND status="ACTIVE"'
-    db = nfw.Mysql()
+    db = Mysql()
     resources = db.execute(sql, (rid,))
     if resources:
         return json.dumps(len(resources))
@@ -696,7 +697,7 @@ def checkResourceUsage(resource, rid):
 
 
 def deviceExists(id):
-    db = nfw.Mysql()
+    db = Mysql()
     sql = 'SELECT count(id) as count FROM device where id=%s'
     result = db.execute(sql, (id,))
     if result[0]['count'] > 0:
@@ -719,7 +720,6 @@ def viewSR(req, resp, id=None, view=None, onlyActive=False):
         w['service_requests.id'] = id
     if onlyActive:
         w['service_requests.status'] = 'ACTIVE'
-    log.debug("MYDEBUG:\n%s\n%s" % (w.keys(), w.values()))
     rmap = {}
     rmap['tenant.name'] = 'customer_name'
     rmap['services.name'] = 'service_name'
@@ -740,8 +740,7 @@ def viewSR(req, resp, id=None, view=None, onlyActive=False):
             ctime = result['creation_date']
             timedelta = now - ctime
             if status not in completed:
-                #app = getApp(req)
-                res = app.AsyncResult(result['task_id'])
+                res = celery_app.AsyncResult(result['task_id'])
                 if res.ready() or timedelta.seconds < 3600:
                     status = res.state
                 else:
@@ -776,10 +775,10 @@ def createSR(req):
         try:
             resources[i] = values[i]
         except:
-            raise nfw.HTTPError(nfw.HTTP_404, 'Service creation failed',
+            raise const.HTTPError(const.HTTP_404, 'Service creation failed',
                                 'Missing attribute: %s' % i)
     snippet = jsnip.render(**resources)
-    db = nfw.Mysql()
+    db = Mysql()
     deviceIP = inttoip(deviceID)
     unit = re.search(r'interfaces.*{\n.*\n* +unit (.*) {', snippet)
     if port and unit:
@@ -798,7 +797,7 @@ def createSR(req):
 
 
 def activateSR(req, srid):
-    db = nfw.Mysql()
+    db = Mysql()
     sql = 'SELECT service,resources,device FROM service_requests WHERE id=%s'
     result = db.execute(sql, (srid,))
     if result:
@@ -831,12 +830,12 @@ def activateSR(req, srid):
             db.commit()
             return {"Service Request ID": srid}
     else:
-        raise nfw.HTTPError(nfw.HTTP_404, 'Service activation failed',
+        raise const.HTTPError(const.HTTP_404, 'Service activation failed',
                             'Service request not found: %s' % (srid,))
 
 
 def deactivateSR(req, srid):
-    db = nfw.Mysql()
+    db = Mysql()
     sql = 'SELECT service,resources,device FROM service_requests WHERE id=%s'
     result = db.execute(sql, (srid,))
     if result:
@@ -869,5 +868,5 @@ def deactivateSR(req, srid):
             db.commit()
             return {"Service Request ID": srid}
     else:
-        raise nfw.HTTPError(nfw.HTTP_404, 'Service activation failed',
+        raise const.HTTPError(const.HTTP_404, 'Service activation failed',
                             'Service request not found: %s' % (srid,))

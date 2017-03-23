@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """Netrino API"""
 
-from tachyonic_netrino_api import metadata
+from tachyonic.netrino_api import metadata
+from . import views, middleware
 
 
 __version__ = metadata.version

@@ -279,9 +279,12 @@ def getServices(req,resp,sid=None):
         w = {}
     rmap = {'services.*': ''}
     rmap['interface_groups.name'] = 'igroupname'
+    rmap['role.name'] = 'rolename'
     ljo = OrderedDict()
     ljo['interface_groups'] = {
         'services.interface_group': 'interface_groups.id'}
+    ljo['role'] = {
+        'services.user_role': 'role.id'}
     left_join = sql.LeftJoin(rmap, ljo)
     results = sql.get_query(
         'services', req, resp, None, where=w.keys(),
@@ -292,7 +295,8 @@ def getServices(req,resp,sid=None):
                          'name': result['name'],
                          'interface_group': result['igroupname'],
                          'igroup': result['interface_group'],
-                         'user_role': result['user_role'],
+                         'user_role_id': result['user_role'],
+                         'user_role': result['rolename'],
                          'snippet': result['config_snippet'],
                          'activate': result['activate_snippet'],
                          'deactivate': result['deactivate_snippet'],

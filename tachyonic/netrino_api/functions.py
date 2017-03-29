@@ -145,9 +145,9 @@ def viewDevicePorts(req, resp, ip, view=None):
         rmap['services.name'] = 'service'
         ljo = OrderedDict()
         left_join = sql.LeftJoin(rmap, ljo)
-        ljo['(select max(id) as srid,device,port from service_requests group by device,port) srport'] = {'device_port.port': 'srport.port',
+        ljo['(select max(creation_date) AS srid,device,port from service_requests group by device,port) srport'] = {'device_port.port': 'srport.port',
                                                                                                          'device_port.id': 'srport.device'}
-        ljo['(select id,customer,service FROM service_requests WHERE status in ("SUCCESS","ACTIVE") ) srrest'] = {
+        ljo['(select creation_date AS id,customer,service FROM service_requests WHERE status in ("SUCCESS","ACTIVE") ) srrest'] = {
             'srrest.id': 'srid'}
         ljo['tenant'] = {'srrest.customer': 'tenant.id'}
         ljo['interface_groups'] = {'device_port.igroup': 'interface_groups.id'}
@@ -766,8 +766,8 @@ def createSR(req):
     values = json.loads(req.read())
     deviceID = values['device']
     serviceID = values['service'] if 'service' in values else None
-    customerID = values['customer'] if 'customer' in values else None
     port = values['interface'] if 'interface' in values else None
+    customerID = req.context.get('tenant_id')
     snippet = getSnippet(serviceID)
     jsnip = Template(snippet[0])
     resources = {}

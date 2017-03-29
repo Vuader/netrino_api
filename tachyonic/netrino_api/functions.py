@@ -3,7 +3,7 @@ from collections import OrderedDict
 from pyipcalc import *
 from workers.tasks import *
 from netrino_celery import app as celery_app
-from tachyonic.api.api import sql as api
+from tachyonic.api.api import sql
 from jinja2 import Template
 from tachyonic.neutrino.mysql import Mysql
 from tachyonic.neutrino import constants as const
@@ -126,11 +126,11 @@ def dlog(msg):
 def viewDevicePorts(req, resp, ip, view=None):
     if view == "select2":
         vals = []
-        sql = 'SELECT * FROM interface where id=%s'
+        sql_query = 'SELECT * FROM interface where id=%s'
         vals.append(int(ip))
         db = Mysql()
 
-        results = db.execute(sql, vals)
+        results = db.execute(sql_value, vals)
 
         if len(results) == 0:
             raise HTTPNotFound("Not Found", "Device/ports not found")
@@ -144,17 +144,17 @@ def viewDevicePorts(req, resp, ip, view=None):
         rmap['tenant.name'] = 'customername'
         rmap['services.name'] = 'service'
         ljo = OrderedDict()
-        left_join = api.LeftJoin(rmap, ljo)
-        ljo['(select max(id) as srid,device,port from service_requests group by device,port) srport'] = {'device_port.port': 'srport.port',
+        left_join = sql.LeftJoin(rmap, ljo)
+        ljo['(select max(creation_date) AS srid,device,port from service_requests group by device,port) srport'] = {'device_port.port': 'srport.port',
                                                                                                          'device_port.id': 'srport.device'}
-        ljo['(select id,customer,service FROM service_requests WHERE status in ("SUCCESS","ACTIVE") ) srrest'] = {
+        ljo['(select creation_date AS id,customer,service FROM service_requests WHERE status in ("SUCCESS","ACTIVE") ) srrest'] = {
             'srrest.id': 'srid'}
         ljo['tenant'] = {'srrest.customer': 'tenant.id'}
         ljo['interface_groups'] = {'device_port.igroup': 'interface_groups.id'}
         ljo['services'] = {'srrest.service': 'services.id'}
         where = "device_port.id"
         where_values = [ip]
-        return api.sql_get('device_port', req, resp,
+        return sql.get('device_port', req, resp,
                            None, where=where, where_values=where_values,
                            left_join=left_join)
 
@@ -282,8 +282,8 @@ def getServices(req,resp,sid=None):
     ljo = OrderedDict()
     ljo['interface_groups'] = {
         'services.interface_group': 'interface_groups.id'}
-    left_join = api.LeftJoin(rmap, ljo)
-    results = api.sql_get_query(
+    left_join = sql.LeftJoin(rmap, ljo)
+    results = sql.get_query(
         'services', req, resp, None, where=w.keys(),
         where_values=w.values(), left_join=left_join)
     services = []
@@ -726,8 +726,8 @@ def viewSR(req, resp, id=None, view=None, onlyActive=False):
     ljo = OrderedDict()
     ljo['tenant'] = {'service_requests.customer': 'tenant.id'}
     ljo['services'] = {'services.id': 'service_requests.service'}
-    left_join = api.LeftJoin(rmap, ljo)
-    results = api.sql_get_query(
+    left_join = sql.LeftJoin(rmap, ljo)
+    results = sql.get_query(
         'service_requests', req, resp, None, where=w.keys(),
         where_values=w.values(), left_join=left_join)
     nresults = len(results)
@@ -766,8 +766,8 @@ def createSR(req):
     values = json.loads(req.read())
     deviceID = values['device']
     serviceID = values['service'] if 'service' in values else None
-    customerID = values['customer'] if 'customer' in values else None
     port = values['interface'] if 'interface' in values else None
+    customerID = req.context.get('tenant_id')
     snippet = getSnippet(serviceID)
     jsnip = Template(snippet[0])
     resources = {}

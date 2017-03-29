@@ -38,7 +38,7 @@ class InterfaceGroup(object):
     def get(self, req, resp, id=None):
         view = req.post.get('view', None)
         if id or view == "datatable":
-            return sql.sql_get("interface_groups", req, resp, id)
+            return sql.get("interface_groups", req, resp, id)
         else:
             return json.dumps(getIGroups(id, view), indent=4)
 

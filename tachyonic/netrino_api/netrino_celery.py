@@ -1,4 +1,6 @@
-import nfw
+from tachyonic.neutrino.config import Config
+from tachyonic.neutrino.exceptions import Error
+from tachyonic.neutrino.mysql import Mysql
 import os
 from celery import Celery
 
@@ -14,7 +16,7 @@ from celery import Celery
 
 celeryConfPath = '/etc/netrino-celery.cfg'
 
-config = nfw.Config(celeryConfPath)
+config = Config(celeryConfPath)
 
 try:
     celery = config.get('celery')
@@ -27,13 +29,13 @@ try:
         result_expires=celery.get('result_expires')
     )
 except:
-    raise nfw.Error("No Celery settings found in %s" % celeryConfPath)
+    raise Error("No Celery settings found in %s" % celeryConfPath)
 
 try:
     mysql = config.get('mysql')
-    db = nfw.Mysql(host=mysql.get('host'),
+    db = Mysql(host=mysql.get('host'),
                    database=mysql.get('database'),
                    username=mysql.get('username'),
                    password=mysql.get('password'))
 except:
-    raise nfw.Error("No Celery settings found in %s" % celeryConfPath)
+    raise Error("No Celery settings found in %s" % celeryConfPath)

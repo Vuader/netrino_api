@@ -1,5 +1,5 @@
-from netrino.api.functions import *
-from netrino.api.netrino_celery import *
+from tachyonic.netrino_api.functions import *
+from tachyonic.netrino_api.netrino_celery import *
 import sys
 import os
 import warnings

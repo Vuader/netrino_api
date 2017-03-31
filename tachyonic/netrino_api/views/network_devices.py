@@ -23,15 +23,15 @@ class NetworkDevice(object):
     def __init__(self):
         router.add(const.HTTP_GET, '/infrastructure/network/devices', self.get,
                        'network:admin')
-        router.add(const.HTTP_GET, '/infrastructure/network/devices/{id}', self.get,
+        router.add(const.HTTP_GET, '/infrastructure/network/device/{id}', self.get,
                        'network:admin')
-        router.add(const.HTTP_GET, '/infrastructure/network/devices/{id}/ports', self.ports,
+        router.add(const.HTTP_GET, '/infrastructure/network/device/{id}/ports', self.ports,
                        'network:admin')
-        router.add(const.HTTP_POST, '/infrastructure/network/devices', self.post,
+        router.add(const.HTTP_POST, '/infrastructure/network/device', self.post,
                        'network:admin')
         router.add(
-            const.HTTP_PUT, '/infrastructure/network/devices/{id}', self.put, 'network:admin')
-        router.add(const.HTTP_DELETE, '/infrastructure/network/devices/{id}', self.delete,
+            const.HTTP_PUT, '/infrastructure/network/device/{id}', self.put, 'network:admin')
+        router.add(const.HTTP_DELETE, '/infrastructure/network/device/{id}', self.delete,
                        'users:admin')
 
     def get(self, req, resp, id=None):

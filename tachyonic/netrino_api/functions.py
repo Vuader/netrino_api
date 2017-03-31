@@ -7,6 +7,7 @@ from tachyonic.api.api import sql
 from jinja2 import Template
 from tachyonic.neutrino.mysql import Mysql
 from tachyonic.neutrino import constants as const
+from tachyonic.neutrino import exceptions
 import sys
 import datetime
 import uuid
@@ -124,39 +125,26 @@ def dlog(msg):
 
 
 def viewDevicePorts(req, resp, ip, view=None):
-    if view == "select2":
-        vals = []
-        sql_query = 'SELECT * FROM interface where id=%s'
-        vals.append(int(ip))
-        db = Mysql()
-
-        results = db.execute(sql_value, vals)
-
-        if len(results) == 0:
-            raise HTTPNotFound("Not Found", "Device/ports not found")
-        ports = []
-        for result in results:
-            ports.append({'id': result['port'], 'text': result['name']})
-        return json.dumps(ports, indent=4)
-    else:
-        rmap = {}
-        rmap['interface_groups.name'] = 'igroupname'
-        rmap['tenant.name'] = 'customername'
-        rmap['services.name'] = 'service'
-        ljo = OrderedDict()
-        left_join = sql.LeftJoin(rmap, ljo)
-        ljo['(select max(creation_date) AS srid,device,port from service_requests group by device,port) srport'] = {'device_port.port': 'srport.port',
-                                                                                                         'device_port.id': 'srport.device'}
-        ljo['(select creation_date AS id,customer,service FROM service_requests WHERE status in ("SUCCESS","ACTIVE") ) srrest'] = {
-            'srrest.id': 'srid'}
-        ljo['tenant'] = {'srrest.customer': 'tenant.id'}
-        ljo['interface_groups'] = {'device_port.igroup': 'interface_groups.id'}
-        ljo['services'] = {'srrest.service': 'services.id'}
-        where = "device_port.id"
-        where_values = [ip]
-        return sql.get('device_port', req, resp,
-                           None, where=where, where_values=where_values,
-                           left_join=left_join)
+    igroup = req.post.get('igroup', None)
+    rmap = {}
+    rmap['interface_groups.name'] = 'igroupname'
+    rmap['tenant.name'] = 'customername'
+    rmap['services.name'] = 'service'
+    ljo = OrderedDict()
+    left_join = sql.LeftJoin(rmap, ljo)
+    ljo['(select max(creation_date) AS srid,device,port from service_requests group by device,port) srport'] = {'device_port.port': 'srport.port',
+                                                                                                     'device_port.id': 'srport.device'}
+    ljo['(select creation_date AS id,customer,service FROM service_requests WHERE status in ("SUCCESS","ACTIVE") ) srrest'] = {
+        'srrest.id': 'srid'}
+    ljo['tenant'] = {'srrest.customer': 'tenant.id'}
+    ljo['interface_groups'] = {'device_port.igroup': 'interface_groups.id'}
+    ljo['services'] = {'srrest.service': 'services.id'}
+    w = {"device_port.id" : ip}
+    if igroup:
+        w['device_port.igroup'] = igroup
+    return sql.get('device_port', req, resp,
+                       None, where=w.keys(), where_values=w.values(),
+                       left_join=left_join)
 
 
 def discoverDevice(req, id=None):
@@ -168,31 +156,31 @@ def discoverDevice(req, id=None):
         if result:
             community = result[0]['snmp_comm']
         else:
-            raise const.HTTPError(const.HTTP_404, "Device not found",
+            raise exceptions.HTTPError(const.HTTP_404, "Device not found",
                                 "POST don't PUT")
     else:
         rvalues = json.loads(req.read())
         if not 'snmp_comm' in rvalues:
-            raise const.HTTPError(const.HTTP_404, "Missing required paramater",
+            raise exceptions.HTTPError(const.HTTP_404, "Missing required paramater",
                                 "Required paramater 'snmp_comm' not found")
         elif not 'id' in rvalues:
-            raise const.HTTPError(const.HTTP_404, "Missing required paramater",
+            raise exceptions.HTTPError(const.HTTP_404, "Missing required paramater",
                                 "Required paramater 'id' not found")
         else:
             try:
                 id = int(rvalues['id'])
             except:
-                raise const.HTTPError(const.HTTP_404, 'Invalid type',
+                raise exceptions.HTTPError(const.HTTP_404, 'Invalid type',
                                     "'id' must be integer")
             if deviceExists(id):
-                raise const.HTTPError(const.HTTP_404, 'Device already exists',
+                raise exceptions.HTTPError(const.HTTP_404, 'Device already exists',
                                     "PUT don't POST")
             community = rvalues['snmp_comm']
 
     try:
         ip = dec2ip(id, 4)
     except:
-        raise const.HTTPError(const.HTTP_404, 'Invalid type',
+        raise exceptions.HTTPError(const.HTTP_404, 'Invalid type',
                             "'id' is not a valid ip address")
     srid = addSR(device=id, snippet="Running discovery on " + ip)
     loggedInUser = getLoggedInUser(req)
@@ -202,7 +190,7 @@ def discoverDevice(req, id=None):
         addSR(taskID=task.task_id, srid=srid)
         return {'Service Request': {'id': str(srid), 'task id': str(task.task_id)}}
     else:
-        raise const.HTTPError(const.HTTP_404, 'Failed to create service request',
+        raise exceptions.HTTPError(const.HTTP_404, 'Failed to create service request',
                             "Failed to create service request")
 
 
@@ -273,10 +261,26 @@ def mysqlLJ(s, f, ljo, w=None, g=None):
 
 def getServices(req,resp,sid=None):
     db = Mysql()
+    assignments = req.context.get('assignments')
+    is_root = False
+    roles = []
+    for a in assignments:
+        if a['is_root']:
+            is_root = True
+        roles.append(a['role_id'])
+    w = []
+    w_vals = []
+    if not is_root:
+        where_roles = []
+        for r in roles:
+            where_roles.append('services.user_role = %s')
+            w_vals.append(r)
+        where_roles = " OR ".join(where_roles)
+        w.append("(" + where_roles + ")")
     if sid:
-        w = {'services.id': sid}
-    else:
-        w = {}
+        w.append('services.id')
+        w_vals.append(sid)
+    where = " AND ".join(w) if len(w) else None
     rmap = {'services.*': ''}
     rmap['interface_groups.name'] = 'igroupname'
     rmap['role.name'] = 'rolename'
@@ -287,8 +291,8 @@ def getServices(req,resp,sid=None):
         'services.user_role': 'role.id'}
     left_join = sql.LeftJoin(rmap, ljo)
     results = sql.get_query(
-        'services', req, resp, None, where=w.keys(),
-        where_values=w.values(), left_join=left_join)
+        'services', req, resp, None, where=where,
+        where_values=w_vals, left_join=left_join)
     services = []
     for result in results:
         services.append({'id': result['id'],
@@ -579,7 +583,7 @@ def assignIGPort(req, id):
                        'device': ip}
         return port_igroup
     else:
-        raise const.HTTPError(const.HTTP_404, 'Port Interface group assignment failed',
+        raise exceptions.HTTPError(const.HTTP_404, 'Port Interface group assignment failed',
                             'Item not found %s' % (str(result),))
 
 
@@ -779,7 +783,7 @@ def createSR(req):
         try:
             resources[i] = values[i]
         except:
-            raise const.HTTPError(const.HTTP_404, 'Service creation failed',
+            raise exceptions.HTTPError(const.HTTP_404, 'Service creation failed',
                                 'Missing attribute: %s' % i)
     snippet = jsnip.render(**resources)
     db = Mysql()
@@ -834,7 +838,7 @@ def activateSR(req, srid):
             db.commit()
             return {"Service Request ID": srid}
     else:
-        raise const.HTTPError(const.HTTP_404, 'Service activation failed',
+        raise exceptions.HTTPError(const.HTTP_404, 'Service activation failed',
                             'Service request not found: %s' % (srid,))
 
 
@@ -872,5 +876,5 @@ def deactivateSR(req, srid):
             db.commit()
             return {"Service Request ID": srid}
     else:
-        raise const.HTTPError(const.HTTP_404, 'Service activation failed',
+        raise exceptions.HTTPError(const.HTTP_404, 'Service activation failed',
                             'Service request not found: %s' % (srid,))

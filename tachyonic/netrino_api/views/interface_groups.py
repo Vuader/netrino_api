@@ -26,13 +26,13 @@ class InterfaceGroup(object):
                        'network:admin')
         router.add(const.HTTP_POST, '/infrastructure/network/igroups', self.post,
                        'network:admin')
-        router.add(const.HTTP_GET, '/infrastructure/network/igroups/{id}', self.get,
+        router.add(const.HTTP_GET, '/infrastructure/network/igroup/{id}', self.get,
                        'network:admin')
-        router.add(const.HTTP_PUT, '/infrastructure/network/igroups/{id}', self.put,
+        router.add(const.HTTP_PUT, '/infrastructure/network/igroup/{id}', self.put,
                        'network:admin')
-        router.add(const.HTTP_PUT, '/infrastructure/network/igroups/{id}/port',
+        router.add(const.HTTP_PUT, '/infrastructure/network/igroup/{id}/port',
                        self.portigroup, 'network:admin')
-        router.add(const.HTTP_DELETE, '/infrastructure/network/igroups/{id}', self.delete,
+        router.add(const.HTTP_DELETE, '/infrastructure/network/igroup/{id}', self.delete,
                        'network:admin')
 
     def get(self, req, resp, id=None):

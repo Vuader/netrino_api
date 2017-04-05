@@ -187,7 +187,7 @@ def addDevice(host, user, srid=None, community=None):
                 sql = 'UPDATE service_requests SET status="SUCCESS" where id=%s'
                 db.execute(sql, (srid,))
                 db.commit()
-            updateSupernets(intIP)
+            #updateSupernets(intIP)
         except Exception, e:
             print(str(e))
         device.close()

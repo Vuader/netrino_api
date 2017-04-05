@@ -12,8 +12,8 @@ from tachyonic import router
 from tachyonic.api.api import sql
 from tachyonic.api.api import orm as api
 from tachyonic.neutrino import constants as const
+from tachyonic.netrino_common import model as modelapi
 from ..functions import getIGroups, assignIGPort
-from .. import model as modelapi
 
 log = logging.getLogger(__name__)
 

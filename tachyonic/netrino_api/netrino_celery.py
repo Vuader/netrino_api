@@ -38,4 +38,4 @@ try:
                    username=mysql.get('username'),
                    password=mysql.get('password'))
 except:
-    raise Error("No Celery settings found in %s" % celeryConfPath)
+    raise Error("No mysql settings found in %s" % celeryConfPath)

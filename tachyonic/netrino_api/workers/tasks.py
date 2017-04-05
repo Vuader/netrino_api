@@ -3,9 +3,7 @@ from tachyonic.netrino_api.netrino_celery import *
 import sys
 import os
 import warnings
-import nfw
 import re
-#from ncclient import manager
 import napalm
 from easysnmp import Session
 from pyipcalc import *
@@ -29,7 +27,7 @@ class Port():  # TODO: this is not really nessecary, can remove this class and a
 
 @app.task
 def confDevice(host, user, snippet=None, srid=None, activate=False, deactivate=False):
-    db = nfw.Mysql(host=mysql.get('host'),
+    db = Mysql(host=mysql.get('host'),
                    database=mysql.get('database'),
                    username=mysql.get('username'),
                    password=mysql.get('password'))
@@ -89,7 +87,7 @@ def confDevice(host, user, snippet=None, srid=None, activate=False, deactivate=F
 
 @app.task
 def addDevice(host, user, srid=None, community=None):
-    db = nfw.Mysql(host=mysql.get('host'),
+    db = Mysql(host=mysql.get('host'),
                    database=mysql.get('database'),
                    username=mysql.get('username'),
                    password=mysql.get('password'))

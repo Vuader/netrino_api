@@ -716,7 +716,11 @@ def deviceExists(id):
 
 def viewSR(req, resp, id=None, view=None, onlyActive=False):
     srs = []
-    w = {}
+    tenant = req.context.get('tenant_id', None)
+    if tenant:
+        w = { 'customer': tenant}
+    else:
+        w = {}
     search = req.headers.get('X-Search-Specific', None)
     if search:
         search = search.split(',')

@@ -151,7 +151,7 @@ def addDevice(host, user, srid=None, community=None):
             portresult = device.get_interfaces()
             if portresult:
                 db.execute(
-                    'UPDATE device_port SET present=0 where id="%s"', (intIP,))
+                    'UPDATE device_port SET present=0,alias=%s,prefix_len=%s where id="%s"', (None,None,intIP))
                 db.commit()
             for port in portresult:
                 sql = 'INSERT INTO device_port (id,port,descr,mac,present,igroup) VALUES (%s,%s,%s,%s,%s,NULL)'

@@ -8,6 +8,7 @@ from jinja2 import Template
 from tachyonic.neutrino.mysql import Mysql
 from tachyonic.neutrino import constants as const
 from tachyonic.neutrino import exceptions
+from pytz import reference
 import sys
 import datetime
 import uuid
@@ -745,7 +746,8 @@ def viewSR(req, resp, id=None, view=None, onlyActive=False):
     nresults = len(results)
     if nresults > 0:
         completed = ('FAILURE', 'SUCCESS', 'UNKNOWN', 'ACTIVE', 'INACTIVE')
-        now = datetime.datetime.today()
+        tz = reference.LocalTimezone()
+        now = datetime.datetime.now(tz=tz)
         for result in results:
             srid = result['id']
             status = result['status']

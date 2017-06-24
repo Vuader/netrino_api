@@ -127,6 +127,9 @@ def dlog(msg):
 
 def viewDevicePorts(req, resp, ip, view=None):
     igroup = req.post.get('igroup', None)
+    notinuse = req.post.get('notinuse', None)
+    where_null = []
+
     rmap = {}
     rmap['interface_groups.name'] = 'igroupname'
     rmap['tenant.name'] = 'customername'
@@ -143,9 +146,11 @@ def viewDevicePorts(req, resp, ip, view=None):
     w = {"device_port.id" : ip}
     if igroup:
         w['device_port.igroup'] = igroup
+    if notinuse:
+        where_null.append('service')
     return sql.get('device_port', req, resp,
                        None, where=w.keys(), where_values=w.values(),
-                       left_join=left_join)
+                       left_join=left_join, where_null=where_null)
 
 
 def discoverDevice(req, id=None):
@@ -776,11 +781,32 @@ def viewSR(req, resp, id=None, view=None, onlyActive=False):
     return srs
 
 
-def createSR(req):
+def createSR(req, resp):
+    db = Mysql()
     values = json.loads(req.read())
     deviceID = values['device']
     serviceID = values['service'] if 'service' in values else None
     port = values['interface'] if 'interface' in values else None
+    ljo = {'services': {
+        'device_port.igroup':'services.interface_group'}}
+    w = {}
+    w['device_port.id'] = deviceID
+    w['device_port.port'] = port
+    w['services.id'] = serviceID
+    left_join = sql.LeftJoin({}, ljo)
+    port_allowed = sql.get_query(
+        'device_port', req, resp, None, where=w.keys(),
+        where_values=w.values(), left_join=left_join)
+    pius = ('SELECT id from service_requests where ' +
+            'device=%s AND port=%s AND ' +
+            'status in ("ACTIVE","SUCCESS")')
+    port_in_use = db.execute(pius,(deviceID,port))
+    if not len(port_allowed):
+        raise exceptions.HTTPError(const.HTTP_404, 'Service creation failed',
+            'Port %s not allowed for this service' % port)
+    elif len(port_in_use):
+        raise exceptions.HTTPError(const.HTTP_404, 'Service creation failed',
+            'Port %s already in use' % port)
     customerID = req.context.get('tenant_id')
     snippet = getSnippet(serviceID)
     jsnip = Template(snippet[0])
@@ -792,7 +818,6 @@ def createSR(req):
             raise exceptions.HTTPError(const.HTTP_404, 'Service creation failed',
                                 'Missing attribute: %s' % i)
     snippet = jsnip.render(**resources)
-    db = Mysql()
     deviceIP = inttoip(deviceID)
     unit = re.search(r'interfaces.*{\n.*\n* +unit (.*) {', snippet)
     if port and unit:

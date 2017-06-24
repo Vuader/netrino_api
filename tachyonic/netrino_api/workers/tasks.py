@@ -10,7 +10,6 @@ from pyipcalc import *
 
 warnings.simplefilter("ignore", DeprecationWarning)
 
-
 class Port():  # TODO: this is not really nessecary, can remove this class and all port. 's
 
     def __init__(self):
@@ -46,7 +45,7 @@ def confDevice(host, user, snippet=None, srid=None, activate=False, deactivate=F
             f.write('\nend')
             f.close()
         driver = napalm.get_network_driver(os)
-        private_key = "/tmp/%s.key" % (user,)
+        private_key = "%s/%s.key" % (ssh_key_loc,user)
         device = driver(hostname=host, username=user, password='', optional_args={
                         "allow_agent": True, "ssh_private_key_file": private_key})
         try:
@@ -139,7 +138,7 @@ def addDevice(host, user, srid=None, community=None):
     args = {'host': host, 'port': 22, 'username': user}
     if os:
         driver = napalm.get_network_driver(os)
-        private_key = "/tmp/%s.key" % (user,)
+        private_key = "%s/%s.key" % (ssh_key_loc,user)
         device = driver(hostname=host, username=user, password='', optional_args={
                         "allow_agent": True, "ssh_private_key_file": private_key})
         try:

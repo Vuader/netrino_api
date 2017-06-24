@@ -39,3 +39,8 @@ try:
                    password=mysql.get('password'))
 except:
     raise Error("No mysql settings found in %s" % celeryConfPath)
+
+locations = config.get('locations')
+ssh_key_loc = locations.get('ssh_keys')
+if not ssh_key_loc:
+    raise Error("Did not find ssh_keys under [locations] section in %s" % celeryConfPath)

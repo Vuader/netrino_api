@@ -37,7 +37,7 @@ class ServiceRequests(object):
         return json.dumps(result, indent=4)
 
     def post(self, req, resp):
-        result = createSR(req)
+        result = createSR(req, resp)
         return json.dumps(result, indent=4)
 
     def put(self, req, resp, id):

@@ -2,7 +2,7 @@
 """Netrino API"""
 
 from tachyonic.netrino_api import metadata
-from . import views, middleware
+from . import views
 
 
 __version__ = metadata.version

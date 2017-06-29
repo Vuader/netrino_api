@@ -391,7 +391,10 @@ def getSnippet(serviceID):
         snippet.append(result[0]['activate_snippet'])
         snippet.append(result[0]['deactivate_snippet'])
         fields = result[0]['fields'] or ''
-        snippet.append(fields.split(','))
+        if fields:
+            snippet.append(fields.split(','))
+        else:
+            snippet.append([])
     return snippet
 
 

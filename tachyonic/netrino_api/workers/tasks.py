@@ -7,6 +7,7 @@ import re
 import napalm
 from easysnmp import Session
 from pyipcalc import *
+from datetime import datetime
 
 warnings.simplefilter("ignore", DeprecationWarning)
 
@@ -48,6 +49,7 @@ def confDevice(host, user, snippet=None, srid=None, activate=False, deactivate=F
         private_key = "%s/%s.key" % (ssh_key_loc,user)
         device = driver(hostname=host, username=user, password='', optional_args={
                         "allow_agent": True, "ssh_private_key_file": private_key})
+        now = datetime.strftime(datetime.now(),'%Y-%d-%m %H:%M')
         try:
             device.open()
             device.load_merge_candidate(filename=filename)
@@ -57,14 +59,14 @@ def confDevice(host, user, snippet=None, srid=None, activate=False, deactivate=F
                 if activate:
                     sql += '"ACTIVE"'
                     sql += ',result=CONCAT(IFNULL(result,""),%s)'
-                    vals = ['\n\n--\n' + snippet]
+                    vals = ['\n\n--\n' + now + '\n' + snippet]
                 elif deactivate:
                     sql += '"INACTIVE"'
                     sql += ',result=CONCAT(IFNULL(result,""),%s)'
-                    vals = ['\n\n--\n' + snippet]
+                    vals = ['\n\n--\n' + now + '\n' + snippet]
                 else:
                     sql += '"SUCCESS"'
-                    vals = []
+                    vals = [[now + '\nService Request deployed']]
                 vals.append(srid)
                 sql += ' WHERE id=%s'
                 db.execute(sql, tuple(vals))
@@ -73,13 +75,14 @@ def confDevice(host, user, snippet=None, srid=None, activate=False, deactivate=F
             print(str(e))
             if srid:
                 sql = 'UPDATE service_requests SET result=CONCAT(IFNULL(result,""),%s),status="UNKNOWN" where id=%s'
-                db.execute(sql, ('\n\n--\n' + str(e), srid))
+                db.execute(sql, ('\n\n--\n' + now + '\n' + str(e), srid))
                 db.commit()
         device.close()
     else:
         if srid:
+            now = datetime.strftime(datetime.now(),'%Y-%d-%m %H:%M')
             sql = 'UPDATE service_requests SET result=CONCAT(IFNULL(result,""),%s),status="FAILED" where id=%s'
-            db.execute(sql, ('\n\n--\nUNKNOWN DEVICE', srid))
+            db.execute(sql, ('\n\n--\n' + now + '\n' + 'UNKNOWN DEVICE', srid))
             db.commit()
         return "Unknown Device"
 
@@ -98,8 +101,9 @@ def addDevice(host, user, srid=None, community=None):
     except Exception, e:
         print(str(e))
         if srid:
+            now = datetime.strftime(datetime.now(),'%Y-%d-%m %H:%M')
             sql = 'UPDATE service_requests SET result="%s",status="UNKNOWN" where id="%s"'
-            db.execute(sql, (str(e), srid))
+            db.execute(sql, (now + '\n' + str(e), srid))
             db.commit()
         sys.exit(0)
 
@@ -193,7 +197,8 @@ def addDevice(host, user, srid=None, community=None):
         return result
     else:
         if srid:
-            sql = 'UPDATE service_requests SET status="FAILURE",result="Device not supported" where id=%s'
-            db.execute(sql, (srid,))
+            now = datetime.strftime(datetime.now(),'%Y-%d-%m %H:%M')
+            sql = 'UPDATE service_requests SET status="FAILURE",result="%s\nDevice not supported" where id=%s'
+            db.execute(sql, (now,srid))
             db.commit()
         return "Device not supported"

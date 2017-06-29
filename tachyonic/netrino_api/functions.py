@@ -787,6 +787,7 @@ def createSR(req, resp):
     deviceID = values['device']
     serviceID = values['service'] if 'service' in values else None
     port = values['interface'] if 'interface' in values else None
+
     ljo = {'services': {
         'device_port.igroup':'services.interface_group'}}
     w = {}
@@ -797,17 +798,11 @@ def createSR(req, resp):
     port_allowed = sql.get_query(
         'device_port', req, resp, None, where=w.keys(),
         where_values=w.values(), left_join=left_join)
-    pius = ('SELECT id from service_requests where ' +
-            'device=%s AND port=%s AND ' +
-            'status in ("ACTIVE","SUCCESS")')
-    port_in_use = db.execute(pius,(deviceID,port))
+
     if not len(port_allowed):
         raise exceptions.HTTPError(const.HTTP_404, 'Service creation failed',
             'Port %s not allowed for this service' % port)
-    elif len(port_in_use):
-        raise exceptions.HTTPError(const.HTTP_404, 'Service creation failed',
-            'Port %s already in use' % port)
-    customerID = req.context.get('tenant_id')
+
     snippet = getSnippet(serviceID)
     jsnip = Template(snippet[0])
     resources = {}
@@ -818,10 +813,25 @@ def createSR(req, resp):
             raise exceptions.HTTPError(const.HTTP_404, 'Service creation failed',
                                 'Missing attribute: %s' % i)
     snippet = jsnip.render(**resources)
-    deviceIP = inttoip(deviceID)
+
     unit = re.search(r'interfaces.*{\n.*\n* +unit (.*) {', snippet)
     if port and unit:
         port += "." + unit.group(1)
+    sub_interface = re.search('interface [^ ]*\.([0-9]+)', snippet)
+    if port and sub_interface:
+        port += "." + sub_interface.group(1)
+
+    pius = ('SELECT id from service_requests where ' +
+            'device=%s AND port=%s AND ' +
+            'status in ("ACTIVE","SUCCESS")')
+    port_in_use = db.execute(pius,(deviceID,port))
+    if len(port_in_use):
+        raise exceptions.HTTPError(const.HTTP_404, 'Service creation failed',
+            'Port %s already in use' % port)
+
+    customerID = req.context.get('tenant_id')
+    deviceIP = inttoip(deviceID)
+
     srid = addSR(device=deviceID, customer=customerID, port=port,
                  service=serviceID, snippet=snippet,
                  resources=json.dumps(resources))

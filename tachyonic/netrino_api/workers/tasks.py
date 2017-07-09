@@ -95,13 +95,13 @@ def addDevice(host, user, srid=None, community=None):
                    password=mysql.get('password'))
     intIP = ip2dec(host, 4)
     session = Session(hostname=host, community=community, version=2)
+    now = datetime.strftime(datetime.now(), '%Y-%d-%m %H:%M')
     try:
         # getting system.sysDescr.0
         sysdescription = session.get('1.3.6.1.2.1.1.1.0')
     except Exception, e:
         print(str(e))
         if srid:
-            now = datetime.strftime(datetime.now(),'%Y-%d-%m %H:%M')
             sql = 'UPDATE service_requests SET result="%s",status="UNKNOWN" where id=%s'
             db.execute(sql, (now + '\n' + str(e), srid))
             db.commit()
@@ -134,9 +134,10 @@ def addDevice(host, user, srid=None, community=None):
     sql += ' name=%s,'
     sql += ' vendor=%s,'
     sql += ' os=%s,'
-    sql += ' os_ver=%s'
+    sql += ' os_ver=%s,'
+    sql += ' last_discover=%s'
     result = db.execute(sql, (intIP, community, hostname, vendor, os, os_ver,
-                              community, hostname, vendor, os, os_ver))
+                              community, hostname, vendor, os, os_ver, now))
     db.commit()
 
     args = {'host': host, 'port': 22, 'username': user}

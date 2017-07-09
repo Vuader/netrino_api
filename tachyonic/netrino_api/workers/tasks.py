@@ -102,7 +102,7 @@ def addDevice(host, user, srid=None, community=None):
         print(str(e))
         if srid:
             now = datetime.strftime(datetime.now(),'%Y-%d-%m %H:%M')
-            sql = 'UPDATE service_requests SET result="%s",status="UNKNOWN" where id="%s"'
+            sql = 'UPDATE service_requests SET result="%s",status="UNKNOWN" where id=%s'
             db.execute(sql, (now + '\n' + str(e), srid))
             db.commit()
         sys.exit(0)

@@ -10,7 +10,7 @@ CREATE TABLE `device` (
   `vendor` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `os` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `os_ver` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `last_discover` datetime DEFAULT NULL,
+  `last_discover` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

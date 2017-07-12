@@ -46,7 +46,7 @@ def confDevice(host, user, snippet=None, srid=None, activate=False, deactivate=F
             f.write('\nend')
             f.close()
         driver = napalm.get_network_driver(os)
-        private_key = "%s/%s.key" % (ssh_key_loc,user)
+        private_key = str("%s/%s.key" % (ssh_key_loc,user))
         device = driver(hostname=host, username=user, password='', optional_args={
                         "allow_agent": True, "ssh_private_key_file": private_key})
         now = datetime.strftime(datetime.now(),'%Y-%d-%m %H:%M')

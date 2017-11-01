@@ -7,7 +7,7 @@ from __future__ import print_function
 import argparse
 import sys
 
-from tachyonic_netrino_api import metadata
+from tachyonic.netrino_api import metadata
 
 
 def main(argv):

@@ -4,10 +4,12 @@ from pyipcalc import *
 from workers.tasks import *
 from netrino_celery import app as celery_app
 from tachyonic.api.api import sql
+from tachyonic.api.api import orm as api
 from jinja2 import Template
 from tachyonic.neutrino.mysql import Mysql
 from tachyonic.neutrino import constants as const
 from tachyonic.neutrino import exceptions
+from tachyonic.netrino_common import model as modelapi
 from pytz import reference
 import sys
 import datetime
@@ -152,6 +154,29 @@ def viewDevicePorts(req, resp, ip, view=None):
                        None, where=w.keys(), where_values=w.values(),
                        left_join=left_join, where_null=where_null)
 
+def addDeviceUnitTest(rvalues):
+    """
+    Function to add devices in the case of unit tests.
+    We need to treat them differently, because under
+    normal circumstances we only want to add devices
+    that we could discover. In the case of unit tests
+    the devices aren't real, so have to manually add them.
+
+    :param rvalues: Dictionary containing the Device
+    values to be added to the DB
+    :return: None
+    """
+    intIP = rvalues['id']
+    community = rvalues['snmp_comm']
+    hostname = "unittest"
+    vendor = "unittest"
+    os = "unittest"
+    os_ver = "unittest"
+    db = Mysql()
+    sql = 'INSERT INTO device (id, snmp_comm, name, vendor, os, os_ver) VALUES (%s, %s, %s, %s, %s, %s)'
+    db.execute(sql, (intIP, community, hostname, vendor, os, os_ver))
+    db.commit()
+    return None
 
 def discoverDevice(req, id=None):
     if id:
@@ -161,6 +186,7 @@ def discoverDevice(req, id=None):
         result = db.execute(sql, (id,))
         if result:
             community = result[0]['snmp_comm']
+            rvalues = {}
         else:
             raise exceptions.HTTPError(const.HTTP_404, "Device not found",
                                 "POST don't PUT")
@@ -183,12 +209,21 @@ def discoverDevice(req, id=None):
                                     "PUT don't POST")
             community = rvalues['snmp_comm']
 
+
     try:
-        ip = dec2ip(id, 4)
+        ip = int_to_ip(id, 4)
     except:
         raise exceptions.HTTPError(const.HTTP_404, 'Invalid type',
                             "'id' is not a valid ip address")
+
     srid = addSR(device=id, snippet="Running discovery on " + ip)
+    # We only add devices if we could discover them
+    # When running a Unit test, the device does not
+    # really exist. So ending this function here
+    # if that is the case
+    if 'unittest' in rvalues:
+        addDeviceUnitTest(rvalues)
+        return {}
     loggedInUser = getLoggedInUser(req)
     user = loggedInUser['username']
     task = addDevice.delay(host=ip, user=user, srid=srid, community=community)
@@ -407,9 +442,9 @@ def addSR(device=None, taskID=None, srid=None, customer=None,
     else:
         srid = str(uuid.uuid4())
         sql = ('INSERT INTO service_requests' +
-               ' (id,device,customer,port,service,result,resources)' +
-               ' VALUES (%s,%s,%s,%s,%s,%s,%s)')
-        vals = (srid, device, customer, port, service, snippet, resources)
+               ' (id,device,customer,port,service,result,resources,status,task_id)' +
+               ' VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)')
+        vals = (srid, device, customer, port, service, snippet, resources, "PENDING", '')
     db.execute(sql, vals)
     db.commit()
     return srid
@@ -573,7 +608,7 @@ def getSupernets(sid=None):
     supernets = {}
     for result in results:
         # perhaps the supernets table needs a version column
-        supernets[result['id']] = str(dec2ip(result['network'], 4))
+        supernets[result['id']] = str(int_to_ip(result['network'], 4))
         supernets[result['id']] += "/" + str(result['prefix'])
     return supernets
 
@@ -633,7 +668,7 @@ def updateSupernets(did):
     existing_supernets = {}
     new_supernets = []
     for sr in sresults:
-        ipnet = IPNetwork(dec2ip(sr['network'], 4) + '/' + str(sr['prefix']))
+        ipnet = IPNetwork(int_to_ip(sr['network'], 4) + '/' + str(sr['prefix']))
         existing_supernets[sr['id']] = ipnet
     for ipresult in ipresults:
         ip = ipresult['alias']
@@ -769,7 +804,7 @@ def viewSR(req, resp, id=None, view=None, onlyActive=False):
                     status = 'UNKNOWN'
                 updateSR(srid=srid, status=status)
             device = result['device']
-            device = dec2ip(int(device), 4)
+            device = int_to_ip(int(device), 4)
             srs.append({'id': srid,
                         'creation_date': str(result['creation_date']),
                         'device': device,
@@ -791,20 +826,21 @@ def createSR(req, resp):
     serviceID = values['service'] if 'service' in values else None
     port = values['interface'] if 'interface' in values else None
 
-    ljo = {'services': {
-        'device_port.igroup':'services.interface_group'}}
-    w = {}
-    w['device_port.id'] = deviceID
-    w['device_port.port'] = port
-    w['services.id'] = serviceID
-    left_join = sql.LeftJoin({}, ljo)
-    port_allowed = sql.get_query(
-        'device_port', req, resp, None, where=w.keys(),
-        where_values=w.values(), left_join=left_join)
+    if port:
+        ljo = {'services': {
+            'device_port.igroup':'services.interface_group'}}
+        w = {}
+        w['device_port.id'] = deviceID
+        w['device_port.port'] = port
+        w['services.id'] = serviceID
+        left_join = sql.LeftJoin({}, ljo)
+        port_allowed = sql.get_query(
+            'device_port', req, resp, None, where=w.keys(),
+            where_values=w.values(), left_join=left_join)
 
-    if not len(port_allowed):
-        raise exceptions.HTTPError(const.HTTP_404, 'Service creation failed',
-            'Port %s not allowed for this service' % port)
+        if not len(port_allowed):
+            raise exceptions.HTTPError(const.HTTP_404, 'Service creation failed',
+                'Port %s not allowed for this service' % port)
 
     snippet = getSnippet(serviceID)
     jsnip = Template(snippet[0])
@@ -866,7 +902,7 @@ def activateSR(req, srid):
                    ' WHERE id=%s')
             db.execute(sql, (srid,))
             db.commit()
-            deviceIP = dec2ip(int(device), 4)
+            deviceIP = int_to_ip(int(device), 4)
             loggedInUser = getLoggedInUser(req)
             user = loggedInUser['username']
             task = confDevice.delay(deviceIP,
@@ -904,7 +940,7 @@ def deactivateSR(req, srid):
                    ' WHERE id=%s')
             db.execute(sql, (srid,))
             db.commit()
-            deviceIP = dec2ip(int(device), 4)
+            deviceIP = int_to_ip(int(device), 4)
             loggedInUser = getLoggedInUser(req)
             user = loggedInUser['username']
             task = confDevice.delay(deviceIP,
@@ -922,3 +958,25 @@ def deactivateSR(req, srid):
     else:
         raise exceptions.HTTPError(const.HTTP_404, 'Service activation failed',
                             'Service request not found: %s' % (srid,))
+
+
+def deleteSR(srid):
+    """
+    Function to delete a Service Request
+    :param srid: ID of Service Request to be deleted
+    :return: dictionary with result
+    """
+    db = Mysql()
+    sql = 'DELETE FROM service_requests WHERE id=%s'
+    # TODO: perhaps append RETURNING id above, and
+    # TODO: result = db.execute below, then check if
+    # TODO: result was successfull, because this
+    # TODO: currently succeeds even when id does not exists
+    try:
+        db.execute(sql, (srid,))
+        db.commit()
+        return {'action': 'success'}
+    except:
+        raise exceptions.HTTPError(const.HTTP_404, 'Service activation failed',
+                            'Service request not found: %s' % (srid,))
+        return {'action': 'failed'}

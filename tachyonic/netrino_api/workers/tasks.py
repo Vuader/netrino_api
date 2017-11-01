@@ -38,7 +38,7 @@ def confDevice(host, user, snippet=None, srid=None, activate=False, deactivate=F
         f.close()
     args = {'host': host, 'port': 22, 'username': user}
     sql = 'SELECT os FROM device where id=%s'
-    result = db.execute(sql, (ip2dec(host, 4),))
+    result = db.execute(sql, (ip_to_int(host),))
     if len(result) > 0:
         os = result[0]['os'].lower()
         if os == 'ios' and not re.search(r'\nend$', snippet):
@@ -93,7 +93,7 @@ def addDevice(host, user, srid=None, community=None):
                    database=mysql.get('database'),
                    username=mysql.get('username'),
                    password=mysql.get('password'))
-    intIP = ip2dec(host, 4)
+    intIP = ip_to_int(host)
     session = Session(hostname=host, community=community, version=2)
     now = datetime.strftime(datetime.now(), '%Y-%d-%m %H:%M')
     try:
@@ -186,7 +186,7 @@ def addDevice(host, user, srid=None, community=None):
                     ipnet = IPNetwork(ip + iprefix)
                     result = db.execute(sql, (intIP, port, ip, pl))
                     db.commit()
-                    dec_ip = ip2dec(ip, ipnet._version)
+                    dec_ip = ip_to_int(ip)
             if srid:
                 sql = 'UPDATE service_requests SET status="SUCCESS" where id=%s'
                 db.execute(sql, (srid,))

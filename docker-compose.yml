@@ -1,0 +1,27 @@
+# docker-compose used when developing for tachyonic and netrino
+# copy this docker-compose.yml file to the parent directory
+# where all the Tachyonic projects live
+# Use the Dockerfile to build the netrino Image
+version: '3'
+services:
+  tachyonic:
+    image: "tachyonic"
+    ports:
+     - "80:80"
+    volumes:
+     -  ./tachyonic/tachyonic:/usr/local/lib/python3.5/dist-packages/tachyonic/tachyonic
+     -  ./tachyonic_neutrino/tachyonic/neutrino:/usr/local/lib/python3.5/dist-packages/tachyonic/neutrino
+     -  ./tachyonic_api/tachyonic/api:/usr/local/lib/python3.5/dist-packages/tachyonic/api
+     -  ./tachyonic_ui/tachyonic/ui:/usr/local/lib/python3.5/dist-packages/tachyonic/ui
+  netrino:
+    image: "netrino"
+    ports:
+     - "80:80"
+    volumes:
+     -  ./tachyonic/tachyonic:/usr/local/lib/python3.5/dist-packages/tachyonic/tachyonic
+     -  ./tachyonic_neutrino/tachyonic/neutrino:/usr/local/lib/python3.5/dist-packages/tachyonic/neutrino
+     -  ./tachyonic_api/tachyonic/api:/usr/local/lib/python3.5/dist-packages/tachyonic/api
+     -  ./tachyonic_ui/tachyonic/ui:/usr/local/lib/python3.5/dist-packages/tachyonic/ui
+     -  ./netrino_ui/tachyonic/netrino_ui:/usr/local/lib/python3.5/dist-packages/tachyonic/netrino_ui
+     -  ./netrino_api/tachyonic/netrino_api:/usr/local/lib/python3.5/dist-packages/tachyonic/netrino_api
+     -  ./netrino_common/tachyonic/netrino_common:/usr/local/lib/python3.5/dist-packages/tachyonic/netrino_common

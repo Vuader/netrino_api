@@ -1,8 +1,10 @@
-from __future__ import print_function
+#from __future__ import print_function
+import logging
+
 from collections import OrderedDict
 from pyipcalc import *
-from workers.tasks import *
-from netrino_celery import app as celery_app
+from .workers.tasks import *
+from .netrino_celery import app as celery_app
 from tachyonic.api.api import sql
 from tachyonic.api.api import orm as api
 from jinja2 import Template
@@ -15,9 +17,9 @@ import sys
 import datetime
 import uuid
 import re
-import thread
 import json
 
+log = logging.getLogger(__name__)
 
 def getLoggedInUser(req):
     token = req.headers.get('X-Auth-Token', None)
@@ -151,7 +153,7 @@ def viewDevicePorts(req, resp, ip, view=None):
     if notinuse:
         where_null.append('service')
     return sql.get('device_port', req, resp,
-                       None, where=w.keys(), where_values=w.values(),
+                       None, where=list(w.keys()), where_values=w.values(),
                        left_join=left_join, where_null=where_null)
 
 def addDeviceUnitTest(rvalues):
@@ -191,7 +193,7 @@ def discoverDevice(req, id=None):
             raise exceptions.HTTPError(const.HTTP_404, "Device not found",
                                 "POST don't PUT")
     else:
-        rvalues = json.loads(req.read())
+        rvalues = req.json()
         if not 'snmp_comm' in rvalues:
             raise exceptions.HTTPError(const.HTTP_404, "Missing required paramater",
                                 "Required paramater 'snmp_comm' not found")
@@ -302,13 +304,8 @@ def mysqlLJ(s, f, ljo, w=None, g=None):
 
 def getServices(req,resp,sid=None):
     db = Mysql()
-    assignments = req.context.get('assignments')
-    is_root = False
-    roles = []
-    for a in assignments:
-        if a['is_root']:
-            is_root = True
-        roles.append(a['role_id'])
+    roles = req.context.get('roles')
+    is_root = True if 'Root' in roles else False
     w = []
     w_vals = []
     if not is_root:
@@ -329,7 +326,7 @@ def getServices(req,resp,sid=None):
     ljo['interface_groups'] = {
         'services.interface_group': 'interface_groups.id'}
     ljo['role'] = {
-        'services.user_role': 'role.id'}
+        'services.user_role': 'role.name'}
     left_join = sql.LeftJoin(rmap, ljo)
     results = sql.get_query(
         'services', req, resp, None, where=where,
@@ -614,7 +611,7 @@ def getSupernets(sid=None):
 
 
 def assignIGPort(req, id):
-    values = json.loads(req.read())
+    values = req.json()
     port = values['port']
     ip = values['device']
     db = Mysql()
@@ -784,7 +781,7 @@ def viewSR(req, resp, id=None, view=None, onlyActive=False):
     ljo['services'] = {'services.id': 'service_requests.service'}
     left_join = sql.LeftJoin(rmap, ljo)
     results = sql.get_query(
-        'service_requests', req, resp, None, where=w.keys(),
+        'service_requests', req, resp, None, where=list(w.keys()),
         where_values=w.values(), left_join=left_join)
     nresults = len(results)
     if nresults > 0:
@@ -821,7 +818,7 @@ def viewSR(req, resp, id=None, view=None, onlyActive=False):
 
 def createSR(req, resp):
     db = Mysql()
-    values = json.loads(req.read())
+    values = req.json()
     deviceID = values['device']
     serviceID = values['service'] if 'service' in values else None
     port = values['interface'] if 'interface' in values else None

@@ -1,7 +1,5 @@
 from tachyonic.netrino_api.functions import *
 from tachyonic.netrino_api.netrino_celery import *
-import sys
-import os
 import warnings
 import re
 import napalm
@@ -11,32 +9,18 @@ from datetime import datetime
 
 warnings.simplefilter("ignore", DeprecationWarning)
 
-class Port():  # TODO: this is not really nessecary, can remove this class and all port. 's
-
-    def __init__(self):
-        self.ip = 0
-        self.port = ''
-        self.alias = ''
-        self.prefix_len = 0
-        self.descr = ''
-        self.name = ''
-        self.mac = ''
-        self.vlan = ''
-        self.present = True
-
 
 @app.task
 def confDevice(host, user, snippet=None, srid=None, activate=False, deactivate=False):
     db = Mysql(host=mysql.get('host'),
-                   database=mysql.get('database'),
-                   username=mysql.get('username'),
-                   password=mysql.get('password'))
+               database=mysql.get('database'),
+               username=mysql.get('username'),
+               password=mysql.get('password'))
     if snippet and srid:
         filename = "/tmp/" + srid + ".conf"
         f = open(filename, "w")
         f.write(snippet)
         f.close()
-    args = {'host': host, 'port': 22, 'username': user}
     sql = 'SELECT os FROM device where id=%s'
     result = db.execute(sql, (ip_to_int(host),))
     if len(result) > 0:
@@ -46,10 +30,10 @@ def confDevice(host, user, snippet=None, srid=None, activate=False, deactivate=F
             f.write('\nend')
             f.close()
         driver = napalm.get_network_driver(os)
-        private_key = str("%s/%s.key" % (ssh_key_loc,user))
+        private_key = str("%s/%s.key" % (ssh_key_loc, user))
         device = driver(hostname=host, username=user, password='', optional_args={
-                        "allow_agent": True, "ssh_private_key_file": private_key})
-        now = datetime.strftime(datetime.now(),'%Y-%d-%m %H:%M')
+            "allow_agent": True, "ssh_private_key_file": private_key})
+        now = datetime.strftime(datetime.now(), '%Y-%d-%m %H:%M')
         try:
             device.open()
             device.load_merge_candidate(filename=filename)
@@ -71,7 +55,7 @@ def confDevice(host, user, snippet=None, srid=None, activate=False, deactivate=F
                 sql += ' WHERE id=%s'
                 db.execute(sql, tuple(vals))
                 db.commit()
-        except Exception, e:
+        except Exception as e:
             print(str(e))
             if srid:
                 sql = 'UPDATE service_requests SET result=CONCAT(IFNULL(result,""),%s),status="UNKNOWN" where id=%s'
@@ -80,7 +64,7 @@ def confDevice(host, user, snippet=None, srid=None, activate=False, deactivate=F
         device.close()
     else:
         if srid:
-            now = datetime.strftime(datetime.now(),'%Y-%d-%m %H:%M')
+            now = datetime.strftime(datetime.now(), '%Y-%d-%m %H:%M')
             sql = 'UPDATE service_requests SET result=CONCAT(IFNULL(result,""),%s),status="FAILED" where id=%s'
             db.execute(sql, ('\n\n--\n' + now + '\n' + 'UNKNOWN DEVICE', srid))
             db.commit()
@@ -90,16 +74,16 @@ def confDevice(host, user, snippet=None, srid=None, activate=False, deactivate=F
 @app.task
 def addDevice(host, user, srid=None, community=None):
     db = Mysql(host=mysql.get('host'),
-                   database=mysql.get('database'),
-                   username=mysql.get('username'),
-                   password=mysql.get('password'))
+               database=mysql.get('database'),
+               username=mysql.get('username'),
+               password=mysql.get('password'))
     intIP = ip_to_int(host)
     session = Session(hostname=host, community=community, version=2)
     now = datetime.strftime(datetime.now(), '%Y-%d-%m %H:%M')
     try:
         # getting system.sysDescr.0
         sysdescription = session.get('1.3.6.1.2.1.1.1.0')
-    except Exception, e:
+    except Exception as e:
         print(str(e))
         if srid:
             sql = 'UPDATE service_requests SET result="%s",status="UNKNOWN" where id=%s'
@@ -140,22 +124,21 @@ def addDevice(host, user, srid=None, community=None):
                               community, hostname, vendor, os, os_ver, now))
     db.commit()
 
-    args = {'host': host, 'port': 22, 'username': user}
     if os:
         driver = napalm.get_network_driver(os)
-        private_key = "%s/%s.key" % (ssh_key_loc,user)
+        private_key = "%s/%s.key" % (ssh_key_loc, user)
         device = driver(hostname=host, username=user, password='', optional_args={
-                        "allow_agent": True, "ssh_private_key_file": private_key})
+            "allow_agent": True, "ssh_private_key_file": private_key})
         try:
             device.open()
-        except Exception, e:
+        except Exception as e:
             print(str(e))
-            return("Unable to connect to " + host)
+            return ("Unable to connect to " + host)
         try:
             portresult = device.get_interfaces()
             if portresult:
                 db.execute(
-                    'UPDATE device_port SET present=0,alias=%s,prefix_len=%s where id="%s"', (None,None,intIP))
+                    'UPDATE device_port SET present=0,alias=%s,prefix_len=%s where id="%s"', (None, None, intIP))
                 db.commit()
             for port in portresult:
                 sql = 'INSERT INTO device_port (id,port,descr,mac,present,igroup) VALUES (%s,%s,%s,%s,%s,NULL)'
@@ -166,9 +149,9 @@ def addDevice(host, user, srid=None, community=None):
                 sql += ' mac=VALUES(mac),'
                 sql += ' present=1'
                 result = db.execute(sql, (intIP, port, portresult[port][
-                                    'description'], portresult[port]['mac_address'], True))
+                    'description'], portresult[port]['mac_address'], True))
                 db.commit()
-        except Exception, e:
+        except Exception as e:
             print(str(e))
         try:
             ipresult = device.get_interfaces_ip()
@@ -183,23 +166,21 @@ def addDevice(host, user, srid=None, community=None):
                 for ip in ips:
                     pl = ipresult[port]['ipv4'][ip]['prefix_length']
                     iprefix = '/' + str(pl)
-                    ipnet = IPNetwork(ip + iprefix)
                     result = db.execute(sql, (intIP, port, ip, pl))
                     db.commit()
-                    dec_ip = ip_to_int(ip)
             if srid:
                 sql = 'UPDATE service_requests SET status="SUCCESS" where id=%s'
                 db.execute(sql, (srid,))
                 db.commit()
-            #updateSupernets(intIP)
-        except Exception, e:
+                # updateSupernets(intIP)
+        except Exception as e:
             print(str(e))
         device.close()
         return result
     else:
         if srid:
-            now = datetime.strftime(datetime.now(),'%Y-%d-%m %H:%M')
+            now = datetime.strftime(datetime.now(), '%Y-%d-%m %H:%M')
             sql = 'UPDATE service_requests SET status="FAILURE",result="%s\nDevice not supported" where id=%s'
-            db.execute(sql, (now,srid))
+            db.execute(sql, (now, srid))
             db.commit()
         return "Device not supported"

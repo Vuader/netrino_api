@@ -32,7 +32,7 @@ def confDevice(host, user, snippet=None, srid=None, activate=False, deactivate=F
         driver = napalm.get_network_driver(os)
         private_key = str("%s/%s.key" % (ssh_key_loc, user))
         device = driver(hostname=host, username=user, password='', optional_args={
-            "allow_agent": True, "ssh_private_key_file": private_key})
+            "allow_agent": True, "key_file": private_key})
         now = datetime.strftime(datetime.now(), '%Y-%d-%m %H:%M')
         try:
             device.open()
@@ -128,7 +128,7 @@ def addDevice(host, user, srid=None, community=None):
         driver = napalm.get_network_driver(os)
         private_key = "%s/%s.key" % (ssh_key_loc, user)
         device = driver(hostname=host, username=user, password='', optional_args={
-            "allow_agent": True, "ssh_private_key_file": private_key})
+            "allow_agent": True, "key_file": private_key})
         try:
             device.open()
         except Exception as e:
